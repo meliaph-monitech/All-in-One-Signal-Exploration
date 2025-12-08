@@ -29,11 +29,11 @@ import matplotlib.pyplot as plt
 
 # CSV reading options
 CSV_HAS_HEADER = True  # If your CSVs have no header row, set this to False
-NIR_COL = "NIR"        # Column name for NIR signal
-VIS_COL = "VIS"        # Column name for VIS signal
+NIR_COL = 0        # Column name for NIR signal
+VIS_COL = 1        # Column name for VIS signal
 
 # Bead segmentation
-SEGMENT_COLUMN = NIR_COL  # Column used for bead segmentation
+SEGMENT_COLUMN = 2  # Column used for bead segmentation
 DEFAULT_THRESHOLD = 0.0   # Default threshold for segmentation
 
 # Sampling frequency for FFT-based features
