@@ -28,13 +28,13 @@ import matplotlib.pyplot as plt
 # ============================================================
 
 # CSV reading options
-CSV_HAS_HEADER = True  # If your CSVs have no header row, set this to False
-NIR_COL = 0        # Column name for NIR signal
-VIS_COL = 1        # Column name for VIS signal
+CSV_HAS_HEADER = True   # ✅ we DO have a header row (NIR, VIS, L/O, BR)
+NIR_COL = "NIR"         # use the 'NIR' column
+VIS_COL = "VIS"         # use the 'VIS' column
 
 # Bead segmentation
-SEGMENT_COLUMN = 2  # Column used for bead segmentation
-DEFAULT_THRESHOLD = 0.0   # Default threshold for segmentation
+SEGMENT_COLUMN = "L/O"  # third column used for thresholding
+DEFAULT_THRESHOLD = 0.0
 
 # Sampling frequency for FFT-based features
 DEFAULT_FS = 1.0   # If unknown, 1.0 means "normalized frequency units"
@@ -325,7 +325,6 @@ def process_zip_and_compute_features(
                 df = pd.read_csv(f)
             else:
                 df = pd.read_csv(f, header=None)
-                # 👈 make sure columns are 0,1,2,...
                 df.columns = list(range(df.shape[1]))
 
         # 👇 IMPORTANT: check that all three columns exist
