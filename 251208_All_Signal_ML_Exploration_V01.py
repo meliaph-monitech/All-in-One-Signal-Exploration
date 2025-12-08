@@ -302,11 +302,10 @@ def process_zip_and_compute_features(
     zip_bytes: bytes,
     fs: float,
     threshold: float,
-    segment_column: str,
-    nir_col: str,
-    vis_col: str,
+    segment_column,  # allow int or str
+    nir_col,
+    vis_col,
 ):
-    """Main pipeline: read ZIP, segment beads, compute signals & features."""
     zf = zipfile.ZipFile(io.BytesIO(zip_bytes))
 
     files_records = []
@@ -326,9 +325,15 @@ def process_zip_and_compute_features(
                 df = pd.read_csv(f)
             else:
                 df = pd.read_csv(f, header=None)
+                # 👈 make sure columns are 0,1,2,...
+                df.columns = list(range(df.shape[1]))
 
-        # Skip if key columns missing
+        # 👇 IMPORTANT: check that all three columns exist
         if segment_column not in df.columns or nir_col not in df.columns or vis_col not in df.columns:
+            st.warning(
+                f"Skipping file '{name}': expected columns {nir_col}, {vis_col}, {segment_column} "
+                f"but got {list(df.columns)}"
+            )
             continue
 
         defocus_label = parse_defocus_from_filename(name)
@@ -342,16 +347,16 @@ def process_zip_and_compute_features(
             }
         )
 
-        # Segment beads using provided function
+        # ✅ segmentation uses 3rd column (SEGMENT_COLUMN = 2)
         segments = segment_beads(df, segment_column, threshold)
 
-        # If no segment found, treat whole file as one bead
         if not segments:
             segments = [(0, len(df) - 1)]
 
         for bead_index, (start_idx, end_idx) in enumerate(segments, start=1):
             bead_id = f"file{file_id_counter}_bead{bead_index}"
 
+            # ✅ NIR & VIS use 1st and 2nd columns
             nir_signal = df[nir_col].to_numpy()[start_idx : end_idx + 1]
             vis_signal = df[vis_col].to_numpy()[start_idx : end_idx + 1]
 
@@ -373,7 +378,6 @@ def process_zip_and_compute_features(
                 }
             )
 
-            # Compute features for this bead
             feats = compute_features_for_bead(
                 bead_id=bead_id,
                 file_id=file_id_counter,
@@ -392,6 +396,7 @@ def process_zip_and_compute_features(
     features_df = pd.DataFrame(feature_rows)
 
     return files_df, beads_df, signals_dict, features_df
+
 
 
 # ============================================================
@@ -486,6 +491,16 @@ st.title("Welding Defocus – Unsupervised Exploration App")
 
 # ---------------- Sidebar: Upload & Segmentation ----------------
 
+# Initialize session_state containers once
+if "files_df" not in st.session_state:
+    st.session_state["files_df"] = None
+if "beads_df" not in st.session_state:
+    st.session_state["beads_df"] = None
+if "signals_dict" not in st.session_state:
+    st.session_state["signals_dict"] = {}
+if "features_df" not in st.session_state:
+    st.session_state["features_df"] = None
+
 st.sidebar.header("1. Data & Segmentation")
 
 uploaded_zip = st.sidebar.file_uploader("Upload ZIP of CSV files", type=["zip"])
@@ -498,38 +513,44 @@ fs = st.sidebar.number_input(
 )
 
 threshold = st.sidebar.number_input(
-    f"Segmentation threshold on '{SEGMENT_COLUMN}'",
+    f"Segmentation threshold on column {SEGMENT_COLUMN}",
     value=float(DEFAULT_THRESHOLD),
     step=0.1,
 )
 
-segment_button = st.sidebar.button("Segment Bead & Compute Features", disabled=(uploaded_zip is None))
+run_segmentation = st.sidebar.button(
+    "Segment Bead & Compute Features",
+    disabled=(uploaded_zip is None),
+)
 
-if uploaded_zip is None:
-    st.info("Upload a ZIP of CSV files in the sidebar to get started.")
-    files_df = beads_df = features_df = None
-    signals_dict = {}
-else:
-    if segment_button:
-        with st.spinner("Processing ZIP, segmenting beads, and computing features..."):
-            files_df, beads_df, signals_dict, features_df = process_zip_and_compute_features(
-                zip_bytes=uploaded_zip.read(),
-                fs=fs,
-                threshold=threshold,
-                segment_column=SEGMENT_COLUMN,
-                nir_col=NIR_COL,
-                vis_col=VIS_COL,
-            )
-            st.session_state["files_df"] = files_df
-            st.session_state["beads_df"] = beads_df
-            st.session_state["signals_dict"] = signals_dict
-            st.session_state["features_df"] = features_df
+# When button is clicked and a zip is present -> process and store in session_state
+if run_segmentation and uploaded_zip is not None:
+    with st.spinner("Processing ZIP, segmenting beads, and computing features..."):
+        files_df, beads_df, signals_dict, features_df = process_zip_and_compute_features(
+            zip_bytes=uploaded_zip.getvalue(),  # get raw bytes from uploaded file
+            fs=fs,
+            threshold=threshold,
+            segment_column=SEGMENT_COLUMN,      # 3rd column (index 2) used for segmentation
+            nir_col=NIR_COL,                    # 1st column (index 0) used as NIR
+            vis_col=VIS_COL,                    # 2nd column (index 1) used as VIS
+        )
+        st.session_state["files_df"] = files_df
+        st.session_state["beads_df"] = beads_df
+        st.session_state["signals_dict"] = signals_dict
+        st.session_state["features_df"] = features_df
 
-    # Restore from session_state if available
-    files_df = st.session_state.get("files_df", None)
-    beads_df = st.session_state.get("beads_df", None)
-    signals_dict = st.session_state.get("signals_dict", {})
-    features_df = st.session_state.get("features_df", None)
+        st.success(
+            f"Processed {len(files_df)} file(s), {len(beads_df)} bead(s). "
+            f"Features extracted: {features_df.shape[1] - 4} per bead."
+        )
+
+# 🔴 IMPORTANT: these lines must NOT be indented under the if-block above.
+# They run every time the script reruns, so all tabs can see the stored data.
+
+files_df = st.session_state["files_df"]
+beads_df = st.session_state["beads_df"]
+signals_dict = st.session_state["signals_dict"]
+features_df = st.session_state["features_df"]
 
 # ---------------- Main Tabs ----------------
 
