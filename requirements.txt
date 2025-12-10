@@ -4,3 +4,4 @@ streamlit
 scipy
 scikit-learn
 plotly
+matplotlib
