@@ -485,8 +485,8 @@ def pca_2d_plot(X: np.ndarray, meta: pd.DataFrame, color_col: str, title: str):
 # STREAMLIT APP
 # ============================================================
 
-st.set_page_config(page_title="Welding Defocus – Unsupervised Exploration", layout="wide")
-st.title("Welding Defocus – Unsupervised Exploration App")
+st.set_page_config(page_title="Welding Defect – Unsupervised Exploration", layout="wide")
+st.title("Welding Defect – Unsupervised Exploration App")
 
 # ---------------- Sidebar: Upload & Segmentation ----------------
 
@@ -572,14 +572,14 @@ with overview_tab:
         with col3:
             st.metric("Features per bead", features_df.shape[1] - 4)  # exclude metadata cols
 
-        st.subheader("Defocus distribution")
+        st.subheader("Defect distribution")
         df_counts = features_df.groupby("defocus_label")["bead_id"].nunique().reset_index()
         df_counts = df_counts.rename(columns={"bead_id": "num_beads"})
         st.bar_chart(df_counts.set_index("defocus_label"))
 
         st.subheader("Example signals")
         unique_defocus = sorted(features_df["defocus_label"].unique())
-        selected_defocus = st.selectbox("Select defocus level", unique_defocus)
+        selected_defocus = st.selectbox("Select defect level", unique_defocus)
 
         beads_in_defocus = features_df[features_df["defocus_label"] == selected_defocus]["bead_id"].tolist()
         selected_bead = st.selectbox("Select bead", beads_in_defocus)
@@ -600,7 +600,7 @@ with overview_tab:
             ax[1].set_xlabel("Sample index")
             ax[1].grid(True)
 
-            fig.suptitle(f"Bead: {selected_bead} | Defocus: {selected_defocus}")
+            fig.suptitle(f"Bead: {selected_bead} | Defect: {selected_defocus}")
             st.pyplot(fig)
         else:
             st.warning("Signal data not found for this bead (unexpected).")
@@ -701,7 +701,7 @@ with clustering_tab:
                     df_res = meta.copy()
                     df_res["cluster"] = cluster_labels
                     contingency = pd.crosstab(df_res["cluster"], df_res["defocus_label"])
-                    st.write("**Cluster vs Defocus contingency table:**")
+                    st.write("**Cluster vs Defect contingency table:**")
                     st.dataframe(contingency)
 
                     # PCA plots
@@ -709,7 +709,7 @@ with clustering_tab:
                     pca_2d_plot(X_scaled, df_res, color_col="cluster", title="PCA – K-Means clusters")
 
                     st.write("**PCA Projection (color = defocus label)**")
-                    pca_2d_plot(X_scaled, df_res, color_col="defocus_label", title="PCA – Defocus labels")
+                    pca_2d_plot(X_scaled, df_res, color_col="defocus_label", title="PCA – Defect labels")
 
             # --------------------- GMM ---------------------
             with model_tabs[1]:
@@ -746,14 +746,14 @@ with clustering_tab:
                     df_res = meta.copy()
                     df_res["cluster"] = cluster_labels
                     contingency = pd.crosstab(df_res["cluster"], df_res["defocus_label"])
-                    st.write("**Cluster vs Defocus contingency table:**")
+                    st.write("**Cluster vs Defect contingency table:**")
                     st.dataframe(contingency)
 
                     st.write("**PCA Projection (color = cluster)**")
                     pca_2d_plot(X_scaled, df_res, color_col="cluster", title="PCA – GMM clusters")
 
                     st.write("**PCA Projection (color = defocus label)**")
-                    pca_2d_plot(X_scaled, df_res, color_col="defocus_label", title="PCA – Defocus labels")
+                    pca_2d_plot(X_scaled, df_res, color_col="defocus_label", title="PCA – Defect labels")
 
             # --------------------- DBSCAN ---------------------
             with model_tabs[2]:
@@ -789,14 +789,14 @@ with clustering_tab:
                     df_res = meta.copy()
                     df_res["cluster"] = cluster_labels
                     contingency = pd.crosstab(df_res["cluster"], df_res["defocus_label"])
-                    st.write("**Cluster vs Defocus contingency table:**")
+                    st.write("**Cluster vs Defect contingency table:**")
                     st.dataframe(contingency)
 
                     st.write("**PCA Projection (color = cluster)**")
                     pca_2d_plot(X_scaled, df_res, color_col="cluster", title="PCA – DBSCAN clusters")
 
                     st.write("**PCA Projection (color = defocus label)**")
-                    pca_2d_plot(X_scaled, df_res, color_col="defocus_label", title="PCA – Defocus labels")
+                    pca_2d_plot(X_scaled, df_res, color_col="defocus_label", title="PCA – Defect labels")
 
 
 # ============================================================
