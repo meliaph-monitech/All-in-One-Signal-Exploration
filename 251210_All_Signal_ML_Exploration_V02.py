@@ -30,12 +30,21 @@ from plotly.subplots import make_subplots
 # ============================================================
 
 # CSV reading options
-CSV_HAS_HEADER = True   # we DO have a header row (NIR, VIS, L/O, BR)
-NIR_COL = "NIR"         # use the 'NIR' column
-VIS_COL = "VIS"         # use the 'VIS' column
+CSV_HAS_HEADER = True   # CSV has a header row, but header names are NOT used for data access
+
+# CSV column positions (zero-based)
+# 0 = NIR, 1 = VIS, 2 = LO
+NIR_COL_IDX = 0
+VIS_COL_IDX = 1
+LO_COL_IDX = 2
+
+# Display labels only (never used to locate CSV columns)
+NIR_LABEL = "NIR"
+VIS_LABEL = "VIS"
+LO_LABEL = "LO"
 
 # Bead segmentation
-SEGMENT_COLUMN = "L/O"  # column used for thresholding
+SEGMENT_COLUMN_IDX = LO_COL_IDX
 DEFAULT_THRESHOLD = 0.0
 
 # Sampling frequency for FFT-based features
@@ -47,9 +56,9 @@ MAX_FFT_LEN = 4096      # Truncate signal for FFT to this length to keep it ligh
 # BEAD SEGMENTATION FUNCTION (YOUR ORIGINAL)
 # ============================================================
 
-def segment_beads(df: pd.DataFrame, column: str, threshold: float) -> List[Tuple[int, int]]:
+def segment_beads(df: pd.DataFrame, column_idx: int, threshold: float) -> List[Tuple[int, int]]:
     start_indices, end_indices = [], []
-    signal = df[column].to_numpy()
+    signal = df.iloc[:, column_idx].to_numpy()
     i = 0
     while i < len(signal):
         if signal[i] > threshold:
@@ -310,9 +319,9 @@ def process_zip_and_compute_features(
     zip_bytes: bytes,
     fs: float,
     threshold: float,
-    segment_column,
-    nir_col,
-    vis_col,
+    segment_column_idx: int,
+    nir_col_idx: int,
+    vis_col_idx: int,
 ):
     """Main pipeline: read ZIP, segment beads, compute signals & features."""
     zf = zipfile.ZipFile(io.BytesIO(zip_bytes))
@@ -336,11 +345,13 @@ def process_zip_and_compute_features(
                 df = pd.read_csv(f, header=None)
                 df.columns = list(range(df.shape[1]))
 
-        # Check expected columns
-        if segment_column not in df.columns or nir_col not in df.columns or vis_col not in df.columns:
+        # Validate by column count, not by header names
+        required_max_idx = max(segment_column_idx, nir_col_idx, vis_col_idx)
+        if df.shape[1] <= required_max_idx:
             st.warning(
-                f"Skipping file '{name}': expected columns {nir_col}, {vis_col}, {segment_column} "
-                f"but got {list(df.columns)}"
+                f"Skipping file '{name}': expected at least {required_max_idx + 1} columns "
+                f"for NIR/VIS/LO at indices {nir_col_idx}/{vis_col_idx}/{segment_column_idx}, "
+                f"but found only {df.shape[1]} column(s)."
             )
             continue
 
@@ -356,7 +367,7 @@ def process_zip_and_compute_features(
         )
 
         # Segment beads using provided function
-        segments = segment_beads(df, segment_column, threshold)
+        segments = segment_beads(df, segment_column_idx, threshold)
 
         # If no segment found, treat whole file as one bead
         if not segments:
@@ -365,8 +376,8 @@ def process_zip_and_compute_features(
         for bead_index, (start_idx, end_idx) in enumerate(segments, start=1):
             bead_id = f"file{file_id_counter}_bead{bead_index}"
 
-            nir_signal = df[nir_col].to_numpy()[start_idx : end_idx + 1]
-            vis_signal = df[vis_col].to_numpy()[start_idx : end_idx + 1]
+            nir_signal = df.iloc[start_idx : end_idx + 1, nir_col_idx].to_numpy()
+            vis_signal = df.iloc[start_idx : end_idx + 1, vis_col_idx].to_numpy()
 
             signals_dict[bead_id] = {
                 "NIR": nir_signal,
@@ -534,7 +545,7 @@ fs = st.sidebar.number_input(
 )
 
 threshold = st.sidebar.number_input(
-    f"Segmentation threshold on '{SEGMENT_COLUMN}'",
+    f"Segmentation threshold on '{LO_LABEL}' (column index {SEGMENT_COLUMN_IDX})",
     value=float(DEFAULT_THRESHOLD),
     step=0.1,
 )
@@ -551,9 +562,9 @@ if run_segmentation and uploaded_zip is not None:
             zip_bytes=uploaded_zip.getvalue(),
             fs=fs,
             threshold=threshold,
-            segment_column=SEGMENT_COLUMN,
-            nir_col=NIR_COL,
-            vis_col=VIS_COL,
+            segment_column_idx=SEGMENT_COLUMN_IDX,
+            nir_col_idx=NIR_COL_IDX,
+            vis_col_idx=VIS_COL_IDX,
         )
         st.session_state["files_df"] = files_df
         st.session_state["beads_df"] = beads_df
